@@ -10,9 +10,9 @@ parser = argparse.ArgumentParser(description="Cheat Sheep Terminal Application")
 parser.add_argument('-s', '--sheet', help="cheat sheet file", required=True)
 args = parser.parse_args()
 
-class InputBox:
-    def __init__(self, stdscr):
-        self.stdscr = stdscr
+class InputWindow:
+    def __init__(self):
+        self.window = curses.newwin(1, 100, 0, 2)
         self.string = ''
 
     def get_str_cursor_index(self):
@@ -22,32 +22,60 @@ class InputBox:
         insert_index = self.get_str_cursor_index()
         self.string = self.string[:insert_index] \
             + key_code + self.string[insert_index:]
-        self.refresh()
 
     def refresh(self):
-        self.stdscr.addstr(0, 2, ' ' * 10)
-        self.stdscr.addstr(0, 2, self.string)
+        self.window.erase()
+        self.window.addstr(0, 0, self.string)
+        self.window.refresh()
 
     def delete_char(self):
         delete_index = self.get_str_cursor_index()
         self.string = self.string[:delete_index - 1] \
             + self.string[delete_index:]
         curses.setsyx(0, curses.getsyx()[1] - 1)
-        self.refresh()
 
     def process_key(self, key_code):
-        if 32 <= ord(key_code) <= 126:
+        if 32 <= ord(key_code) <= 126: # normal char
             self.insert_char(key_code)
+            return self.string
         elif ord(key_code) == 127: # delete
             self.delete_char()
+            return self.string
 
-class DisplayBox:
-    def __init__(self, stdscr):
-        self.stdscr = stdscr
-        self.stdscr.clear()
-        self.stdscr.addch(0, 0, '>')
-        self.stdscr.addch(0, 1, ' ')
-        self.stdscr.refresh()
+class DisplayWindow:
+    def __init__(self):
+        self.window = curses.newwin(50, 100, 1, 0)
+
+    def show(self, target_items):
+        self.window.erase()
+        for i, target_item in enumerate(target_items):
+            self.window.addstr(i, 0, target_item)
+        self.window.refresh()
+
+class SearchEngine:
+    def __init__(self, sheet):
+        self.items = self.parse(sheet)
+
+    def parse(self, sheet):
+        items = []
+        with open(sheet) as f:
+            for line in f:
+                item = line.strip()
+                if item != '':
+                    items.append(item)
+        return items
+
+    def query(self, query_string):
+        query_items = query_string.split()
+        target_items = []
+        for target_item in self.items:
+            flag = True
+            for query_item in query_items:
+                if target_item.find(query_item) == -1:
+                    flag = False
+            if flag:
+                target_items.append(target_item)
+        return target_items
 
 def init():
     os.environ.setdefault('ESCDELAY', '25')
@@ -59,8 +87,12 @@ def init():
     return stdscr
 
 def run(stdscr):
-    display_box = DisplayBox(stdscr)
-    input_box = InputBox(stdscr)
+    stdscr.clear()
+    stdscr.addch(0, 0, '>')
+    stdscr.addch(0, 1, ' ')
+    search_engine = SearchEngine(args.sheet)
+    display_window = DisplayWindow()
+    input_window = InputWindow()
 
     # key_code = stdscr.getkey()
     # return str(ord(key_code))
@@ -70,9 +102,12 @@ def run(stdscr):
         if ord(key_code) == 27: # esc
             return 'esc'
         elif ord(key_code) == 10: # enter
-            return input_box.string
+            return input_window.string
         else:
-            input_box.process_key(key_code)
+            display_window.show(
+                search_engine.query(
+                    input_window.process_key(key_code)))
+            input_window.refresh()
 
 def destroy(stdscr):
     curses.nocbreak()
