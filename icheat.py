@@ -62,9 +62,29 @@ class DisplayWindow:
 
     def display_item(self, item_index):
         '''item can be multi-line string'''
+        if len(self.cached_info) == 0:
+            return
         item_info = self.cached_info[item_index]
         for line, content in zip(item_info['lines'], item_info['contents']):
             self.window.addstr(line, 0, content)
+
+    def highlight_next(self):
+        sys.stderr.write(str(len(self.cached_info)))
+        if len(self.cached_info) == 0:
+            return
+        # normal display again for highlighting off
+        self.display_item(self.highlight_index)
+        self.highlight_index = \
+            (self.highlight_index + 1) % len(self.cached_info)
+        self.highlight()
+
+    def highlight_prev(self):
+        if len(self.cached_info) == 0:
+            return
+        self.display_item(self.highlight_index)
+        self.highlight_index = \
+            (self.highlight_index - 1) % len(self.cached_info)
+        self.highlight()
 
     def highlight(self):
         if len(self.cached_info) == 0:
@@ -72,6 +92,7 @@ class DisplayWindow:
         item_info = self.cached_info[self.highlight_index]
         for line, content in zip(item_info['lines'], item_info['contents']):
             self.window.addstr(line, 0, content, curses.A_STANDOUT)
+        self.window.refresh()
 
     def get_highlight(self):
         '''return highlighted text'''
@@ -132,14 +153,18 @@ def run(stdscr):
     stdscr.refresh()
 
     # key_code = stdscr.getkey()
-    # return str(ord(key_code))
+    # return key_code
 
     while True:
         key_code = stdscr.getkey()
-        if ord(key_code) == 27: # esc
+        if len(key_code) == 1 and ord(key_code) == 27: # esc
             return 'esc'
-        elif ord(key_code) == 10: # enter
+        elif len(key_code) == 1 and ord(key_code) == 10: # enter
             return display_window.get_highlight()
+        elif key_code == 'KEY_DOWN':
+            display_window.highlight_next()
+        elif key_code == 'KEY_UP':
+            display_window.highlight_prev()
         else:
             display_window.show(
                 search_engine.query(
