@@ -158,7 +158,7 @@ def run(stdscr):
     while True:
         key_code = stdscr.getkey()
         if len(key_code) == 1 and ord(key_code) == 27: # esc
-            return 'esc'
+            return ''
         elif len(key_code) == 1 and ord(key_code) == 10: # enter
             return display_window.get_highlight()
         elif key_code == 'KEY_DOWN':
