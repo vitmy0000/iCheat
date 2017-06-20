@@ -73,6 +73,13 @@ class DisplayWindow:
         for line, content in zip(item_info['lines'], item_info['contents']):
             self.window.addstr(line, 0, content, curses.A_STANDOUT)
 
+    def get_highlight(self):
+        '''return highlighted text'''
+        if len(self.cached_info) == 0:
+            return ''
+        item_info = self.cached_info[self.highlight_index]
+        return ';'.join(item_info['contents'])
+
     def show(self, items):
         '''display items and highlights'''
         self.cache(items)
@@ -132,7 +139,7 @@ def run(stdscr):
         if ord(key_code) == 27: # esc
             return 'esc'
         elif ord(key_code) == 10: # enter
-            return input_window.string
+            return display_window.get_highlight()
         else:
             display_window.show(
                 search_engine.query(
