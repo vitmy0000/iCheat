@@ -1,6 +1,5 @@
 import argparse
 import curses
-from curses.textpad import Textbox
 import fcntl
 import sys
 import os
@@ -68,6 +67,8 @@ class DisplayWindow:
             self.window.addstr(line, 0, content)
 
     def highlight(self):
+        if len(self.cached_info) == 0:
+            return
         item_info = self.cached_info[self.highlight_index]
         for line, content in zip(item_info['lines'], item_info['contents']):
             self.window.addstr(line, 0, content, curses.A_STANDOUT)
@@ -121,8 +122,7 @@ def run(stdscr):
     search_engine = SearchEngine(args.sheet)
     display_window = DisplayWindow()
     input_window = InputWindow()
-    display_window.show(search_engine.get_items())
-    input_window.refresh()
+    stdscr.refresh()
 
     # key_code = stdscr.getkey()
     # return str(ord(key_code))
@@ -137,7 +137,7 @@ def run(stdscr):
             display_window.show(
                 search_engine.query(
                     input_window.process_key(key_code)))
-            input_window.refresh()
+            input_window.refresh() # bring cursor back
 
 def destroy(stdscr):
     curses.nocbreak()
