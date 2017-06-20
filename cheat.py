@@ -45,25 +45,53 @@ class InputWindow:
 class DisplayWindow:
     def __init__(self):
         self.window = curses.newwin(50, 100, 1, 0)
+        self.cached_info = {}
+        self.highlight_index = 0
 
-    def show(self, target_items):
+    def cache(self, items):
+        '''cache information to help display'''
+        self.cached_info = {}
+        line_num = 0
+        for i, item in enumerate(items):
+            self.cached_info[i] = {}
+            self.cached_info[i]['lines'] = []
+            self.cached_info[i]['contents'] = []
+            for line in item.split('\n'):
+                self.cached_info[i]['lines'].append(line_num)
+                self.cached_info[i]['contents'].append(line)
+                line_num += 1
+
+    def display_item(self, item_index):
+        '''item can be multi-line string'''
+        item_info = self.cached_info[item_index]
+        for line, content in zip(item_info['lines'], item_info['contents']):
+            self.window.addstr(line, 0, content)
+
+    def highlight(self):
+        item_info = self.cached_info[self.highlight_index]
+        for line, content in zip(item_info['lines'], item_info['contents']):
+            self.window.addstr(line, 0, content, curses.A_STANDOUT)
+
+    def show(self, items):
+        '''display items and highlights'''
+        self.cache(items)
         self.window.erase()
-        for i, target_item in enumerate(target_items):
-            self.window.addstr(i, 0, target_item)
+        for item_index in range(len(items)):
+            self.display_item(item_index)
+        self.highlight()
         self.window.refresh()
 
 class SearchEngine:
     def __init__(self, sheet):
-        self.items = self.parse(sheet)
-
-    def parse(self, sheet):
-        items = []
+        self.items = []
         with open(sheet) as f:
             for line in f:
                 item = line.strip()
                 if item != '':
-                    items.append(item)
-        return items
+                    self.items.append(item)
+
+    def get_items(self):
+        return self.items
 
     def query(self, query_string):
         query_items = query_string.split()
@@ -93,6 +121,8 @@ def run(stdscr):
     search_engine = SearchEngine(args.sheet)
     display_window = DisplayWindow()
     input_window = InputWindow()
+    display_window.show(search_engine.get_items())
+    input_window.refresh()
 
     # key_code = stdscr.getkey()
     # return str(ord(key_code))
