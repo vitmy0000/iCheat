@@ -10,9 +10,18 @@ parser.add_argument('-s', '--sheet', help="cheat sheet file", required=True)
 args = parser.parse_args()
 
 class InputWindow:
-    def __init__(self):
-        self.window = curses.newwin(1, 100, 0, 2)
+    def __init__(self, stdscr):
         self.string = ''
+        self.window = self.build_window(stdscr)
+        self.refresh()
+
+    def build_window(self, stdscr):
+        height, width = stdscr.getmaxyx()
+        if width < 5 or height < 1:
+            return None
+        stdscr.addch(0, 0, '>')
+        stdscr.addch(0, 1, ' ')
+        return curses.newwin(1, width, 0, 2)
 
     def get_str_cursor_index(self):
         return curses.getsyx()[1] - 2
@@ -42,97 +51,118 @@ class InputWindow:
             return self.string
 
 class DisplayWindow:
-    def __init__(self):
-        self.window = curses.newwin(50, 100, 1, 0)
-        self.cached_info = {}
+    def __init__(self, stdscr, provider):
+        self.window = self.build_window(stdscr)
+        self.provider = provider
+        self.display_item_info = {}
         self.highlight_index = 0
 
-    def cache(self, items):
-        '''cache information to help display'''
-        self.cached_info = {}
-        line_num = 0
-        for i, item in enumerate(items):
-            self.cached_info[i] = {}
-            self.cached_info[i]['lines'] = []
-            self.cached_info[i]['contents'] = []
-            for line in item.split('\n'):
-                self.cached_info[i]['lines'].append(line_num)
-                self.cached_info[i]['contents'].append(line)
-                line_num += 1
+    def build_window(self, stdscr):
+        height, width = stdscr.getmaxyx()
+        if height < 2:
+            return None
+        return curses.newwin(height, width, 1, 0)
 
-    def display_item(self, item_index):
-        '''item can be multi-line string'''
-        if len(self.cached_info) == 0:
-            return
-        item_info = self.cached_info[item_index]
-        for line, content in zip(item_info['lines'], item_info['contents']):
-            self.window.addstr(line, 0, content)
-
-    def highlight_next(self):
-        sys.stderr.write(str(len(self.cached_info)))
-        if len(self.cached_info) == 0:
-            return
-        # normal display again for highlighting off
-        self.display_item(self.highlight_index)
-        self.highlight_index = \
-            (self.highlight_index + 1) % len(self.cached_info)
-        self.highlight()
-
-    def highlight_prev(self):
-        if len(self.cached_info) == 0:
-            return
-        self.display_item(self.highlight_index)
-        self.highlight_index = \
-            (self.highlight_index - 1) % len(self.cached_info)
-        self.highlight()
+    def display_item(self, item, line_num):
+        """return consumed line cnt"""
+        item_index = len(self.display_item_info)
+        self.display_item_info[item_index] = {}
+        self.display_item_info[item_index]['line_nums'] = []
+        self.display_item_info[item_index]['contents'] = []
+        for content in item:
+            self.display_item_info[item_index]['line_nums'].append((line_num))
+            self.display_item_info[item_index]['contents'].append((content))
+            self.window.addstr(line_num, 0, content[:50])
+            line_num += 1
+        return line_num
 
     def highlight(self):
-        if len(self.cached_info) == 0:
+        if len(self.display_item_info) == 0:
             return
-        item_info = self.cached_info[self.highlight_index]
-        for line, content in zip(item_info['lines'], item_info['contents']):
-            self.window.addstr(line, 0, content, curses.A_STANDOUT)
+        item_info = self.display_item_info[self.highlight_index]
+        for line, content in zip(item_info['line_nums'], item_info['contents']):
+            self.window.addstr(line, 0, content[:50], curses.A_STANDOUT)
         self.window.refresh()
 
-    def get_highlight(self):
-        '''return highlighted text'''
-        if len(self.cached_info) == 0:
-            return ''
-        item_info = self.cached_info[self.highlight_index]
-        return ';'.join(item_info['contents'])
+    def show(self):
+        '''display items and highlights
 
-    def show(self, items):
-        '''display items and highlights'''
-        self.cache(items)
+        This method is called on input text change
+        '''
+        self.display_item_info = {}
         self.window.erase()
-        for item_index in range(len(items)):
-            self.display_item(item_index)
+        line_limit = self.window.getmaxyx()[0]
+        line_num = 0
+        while line_num <= 10:# line_limit:
+            try:
+                item = self.provider.provide()
+            except StopIteration:
+                break
+            line_num = self.display_item(item, line_num)
         self.highlight()
         self.window.refresh()
 
-class SearchEngine:
-    def __init__(self, sheet):
-        self.items = []
-        with open(sheet) as f:
-            for line in f:
-                item = line.strip()
-                if item != '':
-                    self.items.append(item)
+class Provider:
+    @staticmethod
+    def create_provider(args):
+        provider_type = 'history'
+        data_files = [args.sheet]
+        if provider_type == 'history':
+            return HistoryProvider(data_files)
+        elif provider_type == 'cheat':
+            return None #CheatProvider(data_files)
+        else:
+            return None
 
-    def get_items(self):
-        return self.items
+    def __init__(self, data_files):
+        self.items = self.parse(data_files)
+        self.item_iterator = iter(self.items)
+        self.query_string = ''
 
-    def query(self, query_string):
-        query_items = query_string.split()
-        target_items = []
-        for target_item in self.items:
-            flag = True
-            for query_item in query_items:
-                if target_item.find(query_item) == -1:
-                    flag = False
-            if flag:
-                target_items.append(target_item)
-        return target_items
+    def parse(self, data_files):
+        return []
+
+    def reset(self, query_string):
+        """on query string change, use new iterator"""
+        self.item_iterator = iter(self.items)
+        self.query_string = query_string
+
+    def validate(self, target_item):
+        pass
+
+    def provide(self):
+        """provide one valid item"""
+        try:
+            while True:
+                target_item = self.item_iterator.next()
+                if self.validate(target_item):
+                    return target_item
+        except StopIteration:
+            raise
+
+class HistoryProvider(Provider):
+    """Provider for command history files
+
+    Each item should be a list of one single line string
+    """
+    def parse(self, data_files):
+        """duplicate item should be remove"""
+        items = set()
+        for data_file in data_files:
+            with open(data_file) as f:
+                for line in f:
+                    item = line.strip()
+                    if item != '':
+                        items.add(item)
+        return [[x] for x in items]
+
+    def validate(self, target_item):
+        query_items = self.query_string.split()
+        flag = True
+        for query_item in query_items:
+            if '\n'.join(target_item).find(query_item) == -1:
+                flag = False
+        return flag
 
 def init():
     os.environ.setdefault('ESCDELAY', '25')
@@ -145,31 +175,31 @@ def init():
 
 def run(stdscr):
     stdscr.clear()
-    stdscr.addch(0, 0, '>')
-    stdscr.addch(0, 1, ' ')
-    search_engine = SearchEngine(args.sheet)
-    display_window = DisplayWindow()
-    input_window = InputWindow()
-    stdscr.refresh()
+    provider = Provider.create_provider(args)
+    input_window = InputWindow(stdscr)
+    display_window = DisplayWindow(stdscr, provider)
+    display_window.show()
+    input_window.refresh()
 
     # key_code = stdscr.getkey()
-    # return key_code
+    # return str(ord(key_code))
 
     while True:
         key_code = stdscr.getkey()
         if len(key_code) == 1 and ord(key_code) == 27: # esc
             return ''
         elif len(key_code) == 1 and ord(key_code) == 10: # enter
-            return display_window.get_highlight()
-        elif key_code == 'KEY_DOWN':
-            display_window.highlight_next()
-        elif key_code == 'KEY_UP':
-            display_window.highlight_prev()
+            return "enter" #display_window.get_highlight()
+        elif key_code == 'KEY_DOWN' or key_code == 'KEY_UP':
+            # display_window.process_key(key_code)
+            pass
+        elif key_code == '' or key_code == '':
+            input_window.process_key(key_code)
         else:
-            display_window.show(
-                search_engine.query(
-                    input_window.process_key(key_code)))
-            input_window.refresh() # bring cursor back
+            # on input text change
+            provider.reset(input_window.process_key(key_code))
+            display_window.show()
+        input_window.refresh() # bring cursor back
 
 def destroy(stdscr):
     curses.nocbreak()
