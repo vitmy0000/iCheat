@@ -14,6 +14,11 @@ class InputWindow:
         self.string = ''
         self.window = self.build_window(stdscr)
         self.refresh()
+        self.funckey_2_action = {
+        }
+
+    def get_funckey_2_action(self):
+        return self.funckey_2_action
 
     def build_window(self, stdscr):
         height, width = stdscr.getmaxyx()
@@ -52,12 +57,35 @@ class InputWindow:
             self.delete_char()
             return self.string
 
+class DisplayLineInfo:
+    """line info for display help
+
+    One item may span multiple display lines
+    """
+    def __init__(self, line_num, content, item_index):
+        self.line_num = line_num
+        self.content = content
+        self.item_index = item_index
+
 class DisplayWindow:
     def __init__(self, stdscr, provider):
         self.window = self.build_window(stdscr)
         self.provider = provider
-        self.display_item_info = {}
-        self.highlight_index = 0
+        self.funckey_2_action = {
+            'KEY_UP': self.highlight_prev,
+            'KEY_DOWN': self.highlight_next,
+        }
+        # display related
+        self.cached_item_cnt = 0
+        self.cached_line_infos = []
+        self.highlighting_item_index = 0
+        self.display_offset = 0
+
+    def highlight_prev(self):
+        pass
+
+    def highlight_next(self):
+        pass
 
     def build_window(self, stdscr):
         height, width = stdscr.getmaxyx()
@@ -67,44 +95,51 @@ class DisplayWindow:
         stdscr.refresh()
         return newwin
 
-    def display_item(self, item, line_num):
-        """return consumed line cnt"""
-        item_index = len(self.display_item_info)
-        self.display_item_info[item_index] = {}
-        self.display_item_info[item_index]['line_nums'] = []
-        self.display_item_info[item_index]['contents'] = []
-        for content in item:
-            self.display_item_info[item_index]['line_nums'].append((line_num))
-            self.display_item_info[item_index]['contents'].append((content))
-            self.window.addstr(line_num, 0, content[:50])
-            line_num += 1
-        return line_num
+    def highlight(self, reverse=False):
+        """set reverse to True for un-highlighting"""
+        pass
 
-    def highlight(self):
-        if len(self.display_item_info) == 0:
-            return
-        item_info = self.display_item_info[self.highlight_index]
-        for line, content in zip(item_info['line_nums'],
-                                 item_info['contents']):
-            self.window.addstr(line, 0, content[:50], curses.A_STANDOUT)
-        self.window.refresh()
+    def cache_item(self, item):
+        for line in item:
+            line_info = DisplayLineInfo(len(self.cached_line_infos), line,
+                                        self.cached_item_cnt)
+            self.cached_line_infos.append(line_info)
+        self.cached_item_cnt += 1
+
+    def draw(self):
+        display_height = self.window.getmaxyx()[0]
+        for line_info in self.cached_line_infos:
+            line_info.line_num >= self.display_offset
+            if (line_info.line_num <= self.display_offset + display_height
+                    and line_info.line_num >= self.display_offset):
+                if line_info.item_index == self.highlighting_item_index:
+                    self.window.addstr(
+                        line_info.line_num - self.display_offset, 0,
+                        line_info.content[:50], curses.A_STANDOUT)
+                else:
+                    self.window.addstr(
+                        line_info.line_num - self.display_offset, 0,
+                        line_info.content[:50])
+
+
 
     def show(self):
         '''display items and highlights
 
         This method is called on input text change
         '''
-        self.display_item_info = {}
         self.window.erase()
+        self.cached_item_cnt = 0
+        self.cached_line_infos = []
+        self.highlighting_item_index = 0
         line_limit = self.window.getmaxyx()[0]
-        line_num = 0
-        while line_num < line_limit:
+        while len(self.cached_line_infos) < line_limit:
             try:
                 item = self.provider.provide()
             except StopIteration:
                 break
-            line_num = self.display_item(item, line_num)
-        self.highlight()
+            self.cache_item(item)
+        self.draw()
         self.window.refresh()
 
 class Provider:
@@ -185,8 +220,8 @@ def run(stdscr):
     display_window.show()
     input_window.refresh()
 
-    key_code = stdscr.getkey()
-    return str(ord(key_code))
+    # key_code = stdscr.getkey()
+    # return str(ord(key_code))
 
     while True:
         key_code = stdscr.getkey()
@@ -194,9 +229,8 @@ def run(stdscr):
             return ''
         elif len(key_code) == 1 and ord(key_code) == 10: # enter
             return "enter" #display_window.get_highlight()
-        elif key_code == 'KEY_DOWN' or key_code == 'KEY_UP':
-            # display_window.process_key(key_code)
-            pass
+        elif key_code in display_window.get_funckey_2_action():
+            display_window.funckey_2_action[key_code]()
         elif key_code == '' or key_code == '':
             input_window.process_key(key_code)
         else:
