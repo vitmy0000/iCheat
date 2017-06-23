@@ -150,7 +150,7 @@ class DisplayWindow:
         return newwin
 
     def get_highlight(self):
-        return 'enter'
+        return self.cached_line_infos[self.highlighting_line_nums[-1]].content
 
     def cache_item(self, item):
         for line in item:
@@ -282,7 +282,7 @@ def run(stdscr):
         if len(key_code) == 1 and ord(key_code) == 27: # esc
             return ''
         elif len(key_code) == 1 and ord(key_code) == 10: # enter
-            display_window.get_highlight()
+            return display_window.get_highlight()
         elif len(key_code) == 1 and 32 <= ord(key_code) <= 126: # normal char
             input_window.insert_char(key_code)
             provider.reset(input_window.get_string())
