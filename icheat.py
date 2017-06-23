@@ -21,7 +21,9 @@ class InputWindow:
             return None
         stdscr.addch(0, 0, '>')
         stdscr.addch(0, 1, ' ')
-        return curses.newwin(1, width, 0, 2)
+        newwin = curses.newwin(1, width, 0, 2)
+        stdscr.refresh()
+        return newwin
 
     def get_str_cursor_index(self):
         return curses.getsyx()[1] - 2
@@ -61,7 +63,9 @@ class DisplayWindow:
         height, width = stdscr.getmaxyx()
         if height < 2:
             return None
-        return curses.newwin(height, width, 1, 0)
+        newwin = curses.newwin(height - 1, width, 1, 0)
+        stdscr.refresh()
+        return newwin
 
     def display_item(self, item, line_num):
         """return consumed line cnt"""
@@ -80,7 +84,8 @@ class DisplayWindow:
         if len(self.display_item_info) == 0:
             return
         item_info = self.display_item_info[self.highlight_index]
-        for line, content in zip(item_info['line_nums'], item_info['contents']):
+        for line, content in zip(item_info['line_nums'],
+                                 item_info['contents']):
             self.window.addstr(line, 0, content[:50], curses.A_STANDOUT)
         self.window.refresh()
 
@@ -167,7 +172,6 @@ class HistoryProvider(Provider):
 def init():
     os.environ.setdefault('ESCDELAY', '25')
     stdscr = curses.initscr()
-    stdscr.notimeout(0)
     curses.noecho()
     curses.cbreak()
     stdscr.keypad(True)
@@ -176,13 +180,13 @@ def init():
 def run(stdscr):
     stdscr.clear()
     provider = Provider.create_provider(args)
-    input_window = InputWindow(stdscr)
     display_window = DisplayWindow(stdscr, provider)
+    input_window = InputWindow(stdscr)
     display_window.show()
     input_window.refresh()
 
-    # key_code = stdscr.getkey()
-    # return str(ord(key_code))
+    key_code = stdscr.getkey()
+    return str(ord(key_code))
 
     while True:
         key_code = stdscr.getkey()
