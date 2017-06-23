@@ -12,13 +12,28 @@ args = parser.parse_args()
 class InputWindow:
     def __init__(self, stdscr):
         self.string = ''
+        self.cursor_loc_sv = 0
         self.window = self.build_window(stdscr)
-        self.refresh()
         self.key_2_modification = {
             '': self.delete_char, # delete
         }
         self.key_2_action = {
+            'KEY_LEFT': self.move_cursor_left,
+            'KEY_RIGHT': self.move_cursor_right,
         }
+
+    def move_cursor_left(self):
+        if self.window.getyx()[1] <= 0:
+            return
+        self.window.move(0, self.window.getyx()[1] - 1)
+
+    def move_cursor_right(self):
+        if self.window.getyx()[1] == len(self.string):
+            return
+        self.window.move(0, self.window.getyx()[1] + 1)
+
+    def getback_focus(self):
+        self.window.refresh()
 
     def get_string(self):
         return self.string
@@ -30,27 +45,29 @@ class InputWindow:
         stdscr.addch(0, 0, '>')
         stdscr.addch(0, 1, ' ')
         newwin = curses.newwin(1, width, 0, 2)
+        newwin.leaveok(0)
         stdscr.refresh()
         return newwin
 
-    def get_str_cursor_index(self):
-        return curses.getsyx()[1] - 2
-
-    def insert_char(self, key_code):
-        insert_index = self.get_str_cursor_index()
-        self.string = self.string[:insert_index] \
-            + key_code + self.string[insert_index:]
-
-    def refresh(self):
-        self.window.erase()
-        self.window.addstr(0, 0, self.string)
-        self.window.refresh()
-
     def delete_char(self):
-        delete_index = self.get_str_cursor_index()
+        delete_index = self.window.getyx()[1]
         self.string = self.string[:delete_index - 1] \
             + self.string[delete_index:]
-        curses.setsyx(0, curses.getsyx()[1] - 1)
+        self.move_cursor_left()
+        self.display_string()
+
+    def insert_char(self, key_code):
+        insert_index = self.window.getyx()[1]
+        self.string = self.string[:insert_index] \
+            + key_code + self.string[insert_index:]
+        self.move_cursor_right()
+        self.display_string()
+
+    def display_string(self):
+        cursor_loc_sv = self.window.getyx()[1]
+        self.window.erase()
+        self.window.addstr(0, 0, self.string)
+        self.window.move(0, cursor_loc_sv)
 
 class DisplayLineInfo:
     """line info for display help
@@ -128,6 +145,7 @@ class DisplayWindow:
         if height < 2:
             return None
         newwin = curses.newwin(height - 1, width, 1, 0)
+        newwin.leaveok(0)
         stdscr.refresh()
         return newwin
 
@@ -254,7 +272,7 @@ def run(stdscr):
     display_window = DisplayWindow(stdscr, provider)
     input_window = InputWindow(stdscr)
     display_window.show()
-    input_window.refresh()
+    input_window.getback_focus()
 
     # key_code = stdscr.getkey()
     # return str(key_code)
@@ -277,7 +295,7 @@ def run(stdscr):
             input_window.key_2_action[key_code]()
         elif key_code in display_window.key_2_action:
             display_window.key_2_action[key_code]()
-        input_window.refresh() # bring cursor back
+        input_window.getback_focus() # bring cursor back
 
 def destroy(stdscr):
     curses.nocbreak()
