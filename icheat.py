@@ -83,7 +83,21 @@ class DisplayWindow:
         self.display_offset = 0
 
     def highlight_prev(self):
-        pass
+        if self.highlighting_item_index == 0:
+            return
+        self.highlighting_item_index -= 1
+        lnum = self.highlighting_line_nums[0] - 1
+        self.highlighting_line_nums = []
+        while lnum >= 0:
+            if (self.cached_line_infos[lnum].item_index
+                    == self.highlighting_item_index):
+                self.highlighting_line_nums.append(lnum)
+                lnum -= 1
+            else:
+                break
+        self.display_offset = min(self.display_offset,
+                                  self.highlighting_line_nums[0])
+        self.draw()
 
     def highlight_next(self):
         """may involve new item fetch or redraw"""
@@ -106,6 +120,7 @@ class DisplayWindow:
                     lnum += 1
                 else:
                     break
+        # align display box and highlighting item
         window_height = self.window.getmaxyx()[0]
         self.display_offset = max(
             self.display_offset,
@@ -132,19 +147,18 @@ class DisplayWindow:
         self.cached_item_cnt += 1
 
     def draw(self):
-        display_height = self.window.getmaxyx()[0]
-        for line_info in self.cached_line_infos:
-            line_info.line_num >= self.display_offset
-            if (line_info.line_num <= self.display_offset + display_height
-                    and line_info.line_num >= self.display_offset):
-                if line_info.item_index == self.highlighting_item_index:
-                    self.window.addstr(
-                        line_info.line_num - self.display_offset, 0,
-                        line_info.content[:50], curses.A_STANDOUT)
-                else:
-                    self.window.addstr(
-                        line_info.line_num - self.display_offset, 0,
-                        line_info.content[:50])
+        display_height, display_width = self.window.getmaxyx()
+        for line_info in (self.cached_line_infos[
+                self.display_offset:self.display_offset + display_height]):
+            # clear line first in case of residue display
+            self.window.addstr(line_info.line_num - self.display_offset, 0,
+                               ' ' * (display_width - 1))
+            if line_info.item_index == self.highlighting_item_index:
+                self.window.addstr(line_info.line_num - self.display_offset, 0,
+                                   line_info.content[:50], curses.A_STANDOUT)
+            else:
+                self.window.addstr(line_info.line_num - self.display_offset, 0,
+                                   line_info.content[:50])
         self.window.refresh()
 
     def show(self):
