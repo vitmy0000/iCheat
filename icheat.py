@@ -14,11 +14,14 @@ class InputWindow:
         self.string = ''
         self.window = self.build_window(stdscr)
         self.refresh()
-        self.funckey_2_action = {
+        self.key_2_modification = {
+            '': self.delete_char, # delete
+        }
+        self.key_2_action = {
         }
 
-    def get_funckey_2_action(self):
-        return self.funckey_2_action
+    def get_string(self):
+        return self.string
 
     def build_window(self, stdscr):
         height, width = stdscr.getmaxyx()
@@ -49,14 +52,6 @@ class InputWindow:
             + self.string[delete_index:]
         curses.setsyx(0, curses.getsyx()[1] - 1)
 
-    def process_key(self, key_code):
-        if 32 <= ord(key_code) <= 126: # normal char
-            self.insert_char(key_code)
-            return self.string
-        elif ord(key_code) == 127: # delete
-            self.delete_char()
-            return self.string
-
 class DisplayLineInfo:
     """line info for display help
 
@@ -71,7 +66,7 @@ class DisplayWindow:
     def __init__(self, stdscr, provider):
         self.window = self.build_window(stdscr)
         self.provider = provider
-        self.funckey_2_action = {
+        self.key_2_action = {
             'KEY_UP': self.highlight_prev,
             'KEY_DOWN': self.highlight_next,
         }
@@ -135,6 +130,9 @@ class DisplayWindow:
         newwin = curses.newwin(height - 1, width, 1, 0)
         stdscr.refresh()
         return newwin
+
+    def get_highlight(self):
+        return 'enter'
 
     def cache_item(self, item):
         for line in item:
@@ -259,22 +257,26 @@ def run(stdscr):
     input_window.refresh()
 
     # key_code = stdscr.getkey()
-    # return str(ord(key_code))
+    # return str(key_code)
 
     while True:
         key_code = stdscr.getkey()
         if len(key_code) == 1 and ord(key_code) == 27: # esc
             return ''
         elif len(key_code) == 1 and ord(key_code) == 10: # enter
-            return "enter" #display_window.get_highlight()
-        elif key_code in display_window.funckey_2_action:
-            display_window.funckey_2_action[key_code]()
-        elif key_code == '' or key_code == '':
-            input_window.process_key(key_code)
-        else:
-            # on input text change
-            provider.reset(input_window.process_key(key_code))
+            display_window.get_highlight()
+        elif len(key_code) == 1 and 32 <= ord(key_code) <= 126: # normal char
+            input_window.insert_char(key_code)
+            provider.reset(input_window.get_string())
             display_window.show()
+        elif key_code in input_window.key_2_modification:
+            input_window.key_2_modification[key_code]()
+            provider.reset(input_window.get_string())
+            display_window.show()
+        elif key_code in input_window.key_2_action:
+            input_window.key_2_action[key_code]()
+        elif key_code in display_window.key_2_action:
+            display_window.key_2_action[key_code]()
         input_window.refresh() # bring cursor back
 
 def destroy(stdscr):
