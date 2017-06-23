@@ -98,7 +98,7 @@ class DisplayWindow:
         self.window.erase()
         line_limit = self.window.getmaxyx()[0]
         line_num = 0
-        while line_num <= 10:# line_limit:
+        while line_num < line_limit:
             try:
                 item = self.provider.provide()
             except StopIteration:
